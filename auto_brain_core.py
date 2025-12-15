@@ -2,13 +2,15 @@ from comment_finder import find_target_comment
 from like_rules import calculate_target_likes
 import requests
 
+# 🔗 Tvoj Like web app (Railway) – ovdje stavi TAČAN URL
 LIKE_APP_URL = "https://lajkovi-crtica-lajkovi.up.railway.app/"
 
-def process_video(video_url: str) -> dict:
-    result = find_target_comment(video_url)
+
+def process_video(video_url: str, keywords: list[str] | None = None) -> dict:
+    result = find_target_comment(video_url, keywords=keywords)
 
     if not result.get("found"):
-        return {"status": "error", "message": "Komentar nije pronađen"}
+        return {"status": "error", "message": result.get("error", "Komentar nije pronađen")}
 
     top_likes = result["top_likes"]
     my_likes = result["my_likes"]
@@ -16,7 +18,7 @@ def process_video(video_url: str) -> dict:
 
     target = calculate_target_likes(top_likes)
     if target == 0:
-        return {"status": "skip", "message": "Top komentar prevelik"}
+        return {"status": "skip", "message": "Top komentar prevelik (preskačem)"}
 
     to_send = max(0, target - my_likes)
     if to_send <= 0:
@@ -31,5 +33,8 @@ def process_video(video_url: str) -> dict:
         "status": "sent",
         "likes_sent": to_send,
         "username": username,
-        "response_snippet": r.text[:300]
+        "top_likes": top_likes,
+        "my_likes_buffered": my_likes,
+        "matched_text": result.get("matched_text", "")[:120],
+        "response_snippet": (r.text or "")[:250],
     }
