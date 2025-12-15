@@ -8,47 +8,35 @@ HTML = """
 <!doctype html>
 <html>
 <head>
-  <title>TikTok Auto Likes</title>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    *{box-sizing:border-box;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
-    body{margin:0;background:radial-gradient(circle at top,#1f2937 0,#020617 55%);color:#e5e7eb;min-height:100vh;display:flex;align-items:center;justify-content:center}
-    .card{width:100%;max-width:980px;background:rgba(15,23,42,.96);border:1px solid rgba(148,163,184,.35);border-radius:16px;box-shadow:0 20px 50px rgba(15,23,42,.9);padding:22px}
-    h2{margin:0 0 6px;font-size:20px;text-transform:uppercase;letter-spacing:.04em}
-    p{margin:0 0 14px;color:#9ca3af;font-size:13px}
-    label{font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em}
-    textarea{width:100%;min-height:190px;margin-top:6px;background:rgba(15,23,42,.85);border:1px solid rgba(55,65,81,.9);border-radius:10px;padding:10px;color:#e5e7eb;font-size:13px;resize:vertical}
-    .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    @media(max-width:820px){.row{grid-template-columns:1fr}}
-    button{margin-top:12px;cursor:pointer;padding:10px 18px;border-radius:999px;border:none;font-weight:700;text-transform:uppercase;letter-spacing:.03em;background:linear-gradient(90deg,#6366f1,#a855f7);color:white;box-shadow:0 8px 22px rgba(79,70,229,.6)}
-    pre{margin-top:12px;background:rgba(15,23,42,.9);border:1px solid rgba(55,65,81,.9);border-radius:10px;padding:10px;max-height:340px;overflow:auto;font-size:11px;white-space:pre-wrap}
-  </style>
+<meta charset="utf-8">
+<title>TikTok Auto Likes</title>
+<style>
+body{background:#020617;color:#e5e7eb;font-family:system-ui}
+.box{max-width:1000px;margin:40px auto;background:#0f172a;padding:20px;border-radius:16px}
+textarea{width:100%;min-height:180px;background:#020617;color:#e5e7eb;padding:10px}
+button{margin-top:10px;padding:10px 18px;border-radius:999px;border:none;background:#6366f1;color:white;font-weight:700}
+pre{margin-top:15px;background:#020617;padding:10px;border-radius:10px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+</style>
 </head>
 <body>
-  <div class="card">
-    <h2>TikTok Auto Likes</h2>
-    <p>Ubaci TikTok video linkove (jedan po liniji). Default keywords su za <b>Money Forbidden Compass</b> — možeš ih mijenjati po kampanji.</p>
-
-    <form method="post">
-      <div class="row">
-        <div>
-          <label>Video links</label>
-          <textarea name="links" placeholder="1 link po liniji...">{{ links or '' }}</textarea>
-        </div>
-        <div>
-          <label>Keywords (1 po liniji)</label>
-          <textarea name="keywords" placeholder="money forbidden compass&#10;damian rothwell&#10;...">{{ keywords or '' }}</textarea>
-        </div>
-      </div>
-
-      <button type="submit">🚀 Send Auto Likes</button>
-    </form>
-
-    {% if log %}
-      <pre>{{ log }}</pre>
-    {% endif %}
-  </div>
+<div class="box">
+<h2>TikTok Auto Likes – Money Forbidden Compass</h2>
+<form method="post">
+<div class="grid">
+<div>
+<label>Video links (1 po liniji)</label>
+<textarea name="links">{{links}}</textarea>
+</div>
+<div>
+<label>Keywords (1 po liniji)</label>
+<textarea name="keywords">{{keywords}}</textarea>
+</div>
+</div>
+<button type="submit">🚀 Send Auto Likes</button>
+</form>
+{% if log %}<pre>{{log}}</pre>{% endif %}
+</div>
 </body>
 </html>
 """
@@ -56,21 +44,26 @@ HTML = """
 @app.route("/", methods=["GET", "POST"])
 def index():
     links = ""
-    log_lines = []
-    kw_text = "\n".join(DEFAULT_KEYWORDS)
+    keywords = "\n".join(DEFAULT_KEYWORDS)
+    logs = []
 
     if request.method == "POST":
         links = request.form.get("links", "")
-        kw_text = request.form.get("keywords", kw_text)
+        keywords = request.form.get("keywords", keywords)
 
-        keywords = [k.strip() for k in kw_text.splitlines() if k.strip()]
-        urls = [l.strip() for l in links.splitlines() if l.strip()]
+        kw_list = [k.strip() for k in keywords.splitlines() if k.strip()]
+        urls = [u.strip() for u in links.splitlines() if u.strip()]
 
         for url in urls:
-            res = process_video(url, keywords=keywords)
-            log_lines.append(f"{url} -> {res}")
+            res = process_video(url, kw_list)
+            logs.append(f"{url} -> {res}")
 
-    return render_template_string(HTML, links=links, keywords=kw_text, log="\n".join(log_lines))
+    return render_template_string(
+        HTML,
+        links=links,
+        keywords=keywords,
+        log="\n".join(logs)
+    )
 
 if __name__ == "__main__":
     app.run(debug=True)
