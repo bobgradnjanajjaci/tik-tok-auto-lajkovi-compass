@@ -1,5 +1,6 @@
 from flask import Flask, request, render_template_string
 from auto_brain_core import process_video
+from comment_finder import DEFAULT_KEYWORDS
 
 app = Flask(__name__)
 
@@ -17,19 +18,30 @@ HTML = """
     h2{margin:0 0 6px;font-size:20px;text-transform:uppercase;letter-spacing:.04em}
     p{margin:0 0 14px;color:#9ca3af;font-size:13px}
     label{font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em}
-    textarea{width:100%;min-height:220px;margin-top:6px;background:rgba(15,23,42,.85);border:1px solid rgba(55,65,81,.9);border-radius:10px;padding:10px;color:#e5e7eb;font-size:13px;resize:vertical}
+    textarea{width:100%;min-height:190px;margin-top:6px;background:rgba(15,23,42,.85);border:1px solid rgba(55,65,81,.9);border-radius:10px;padding:10px;color:#e5e7eb;font-size:13px;resize:vertical}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media(max-width:820px){.row{grid-template-columns:1fr}}
     button{margin-top:12px;cursor:pointer;padding:10px 18px;border-radius:999px;border:none;font-weight:700;text-transform:uppercase;letter-spacing:.03em;background:linear-gradient(90deg,#6366f1,#a855f7);color:white;box-shadow:0 8px 22px rgba(79,70,229,.6)}
-    pre{margin-top:12px;background:rgba(15,23,42,.9);border:1px solid rgba(55,65,81,.9);border-radius:10px;padding:10px;max-height:320px;overflow:auto;font-size:11px;white-space:pre-wrap}
+    pre{margin-top:12px;background:rgba(15,23,42,.9);border:1px solid rgba(55,65,81,.9);border-radius:10px;padding:10px;max-height:340px;overflow:auto;font-size:11px;white-space:pre-wrap}
   </style>
 </head>
 <body>
   <div class="card">
     <h2>TikTok Auto Likes</h2>
-    <p>Ubaci TikTok video linkove (jedan po liniji). Sistem automatski nađe keyword komentar i pošalje lajkove.</p>
+    <p>Ubaci TikTok video linkove (jedan po liniji). Default keywords su za <b>Money Forbidden Compass</b> — možeš ih mijenjati po kampanji.</p>
 
     <form method="post">
-      <label>Video links</label>
-      <textarea name="links" placeholder="https://www.tiktok.com/@user/video/123...&#10;https://www.tiktok.com/@user/video/456...">{{ links or '' }}</textarea>
+      <div class="row">
+        <div>
+          <label>Video links</label>
+          <textarea name="links" placeholder="1 link po liniji...">{{ links or '' }}</textarea>
+        </div>
+        <div>
+          <label>Keywords (1 po liniji)</label>
+          <textarea name="keywords" placeholder="money forbidden compass&#10;damian rothwell&#10;...">{{ keywords or '' }}</textarea>
+        </div>
+      </div>
+
       <button type="submit">🚀 Send Auto Likes</button>
     </form>
 
@@ -45,16 +57,20 @@ HTML = """
 def index():
     links = ""
     log_lines = []
+    kw_text = "\n".join(DEFAULT_KEYWORDS)
 
     if request.method == "POST":
         links = request.form.get("links", "")
-        lines = [l.strip() for l in links.splitlines() if l.strip()]
+        kw_text = request.form.get("keywords", kw_text)
 
-        for url in lines:
-            res = process_video(url)
+        keywords = [k.strip() for k in kw_text.splitlines() if k.strip()]
+        urls = [l.strip() for l in links.splitlines() if l.strip()]
+
+        for url in urls:
+            res = process_video(url, keywords=keywords)
             log_lines.append(f"{url} -> {res}")
 
-    return render_template_string(HTML, links=links, log="\n".join(log_lines))
+    return render_template_string(HTML, links=links, keywords=kw_text, log="\n".join(log_lines))
 
 if __name__ == "__main__":
     app.run(debug=True)
