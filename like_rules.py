@@ -14,18 +14,19 @@ def calculate_target_likes(top_likes: int) -> int:
         return 0
 
     # 🔒 FORSIRANI MINIMUM
-    if top_likes < 300:
+    if top_likes < 200:
         return 250
 
     # ⬇️ OD OVDJE IDE TVOJA POSTOJEĆA LOGIKA (NIJE MIJENJANA)
     if top_likes < 1000:
-        return int(top_likes * 1.3)
+        return int(top_likes * 1.4)
 
     elif top_likes < 3000:
-        return int(top_likes * 2)
+        return int(top_likes * 1.8)
 
     elif top_likes < 8000:
-        return top_likes + 1000
+        return top_likes + 1500
 
     else:
         return top_likes
+
