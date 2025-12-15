@@ -1,16 +1,48 @@
 import re
 import requests
+from typing import List, Optional
 
-# ✅ keywordi koje tražiš (mora biti lower-case)
-KEYWORDS = ["money forbidden compass"]
+# ✅ Default keywords za Money Forbidden Compass (možeš mijenjati u UI)
+DEFAULT_KEYWORDS = [
+    "money forbidden compass",
+    "forbidden compass",
+    "damian rothwell",
+    "money compass",
+    "forbidden money",
+    "mfc",
+]
 
 STATIC_BUFFER = 5
 PERCENT_BUFFER = 0.20
 
-HEADERS = {
+BASE_HEADERS = {
     "User-Agent": "Mozilla/5.0",
     "Accept": "application/json",
 }
+
+
+def normalize_text(s: str) -> str:
+    """
+    Normalizuje tekst (lowercase, ukloni višak razmaka, zadrži slova/brojeve).
+    Pomaže kad TikTok ubaci emoji, čudne razmake, itd.
+    """
+    s = (s or "").lower()
+    # zamijeni sve što nije slovo/broj u razmak
+    s = re.sub(r"[^a-z0-9]+", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+
+def phrase_match(text_norm: str, phrase: str) -> bool:
+    """
+    Fuzzy match: fraza se razbije u tokene i svi tokeni moraju postojati u tekstu.
+    Npr "damian rothwell" matcha i kad je "damian...rothwell" sa emoji između.
+    """
+    p = normalize_text(phrase)
+    if not p:
+        return False
+    tokens = p.split()
+    return all(t in text_norm for t in tokens)
 
 
 def expand_tiktok_url(url: str) -> str:
@@ -25,89 +57,107 @@ def expand_tiktok_url(url: str) -> str:
         return url
 
 
-def extract_video_id(video_url: str) -> str | None:
-    """
-    Izvlači video ID iz punog TikTok URL-a.
-    """
+def extract_video_id(video_url: str) -> Optional[str]:
     match = re.search(r"/video/(\d+)", video_url)
     return match.group(1) if match else None
 
 
-def fetch_comments(video_id: str, count: int = 50) -> list:
+def fetch_comments_paged(video_id: str, count: int = 50, max_pages: int = 5) -> List[dict]:
     """
-    Pokušava povući komentare sa TikTok public endpointa.
+    Povuče više stranica komentara (cursor paging).
+    Ovo dramatično povećava šansu da nađe tvoj komentar.
     """
-    url = "https://www.tiktok.com/api/comment/list/"
-    params = {
-        "aid": 1988,
-        "count": count,
-        "aweme_id": video_id
-    }
+    all_comments: List[dict] = []
+    cursor = 0
 
-    r = requests.get(url, headers=HEADERS, params=params, timeout=15)
-    if r.status_code != 200:
-        return []
+    for _ in range(max_pages):
+        url = "https://www.tiktok.com/api/comment/list/"
+        params = {
+            "aid": 1988,
+            "count": count,
+            "cursor": cursor,
+            "aweme_id": video_id,
+        }
 
-    try:
-        return r.json().get("comments", [])
-    except Exception:
-        return []
+        try:
+            r = requests.get(url, headers=BASE_HEADERS, params=params, timeout=15)
+            if r.status_code != 200:
+                break
+
+            data = r.json()
+            comments = data.get("comments") or []
+            all_comments.extend(comments)
+
+            has_more = bool(data.get("has_more"))
+            cursor = int(data.get("cursor") or 0)
+
+            if not has_more:
+                break
+        except Exception:
+            break
+
+    return all_comments
 
 
 def apply_buffer(likes: int) -> int:
-    """
-    Dodaje buffer jer TikTok UI često pokazuje više lajkova nego API.
-    """
     dynamic = int(likes * PERCENT_BUFFER)
     return likes + max(STATIC_BUFFER, dynamic)
 
 
-def find_target_comment(video_url: str) -> dict:
+def find_target_comment(video_url: str, keywords: Optional[List[str]] = None) -> dict:
     """
-    1) Expand short link (ako je short)
-    2) Izvuci video_id
-    3) Povuci komentare
-    4) Nadji prvi komentar koji sadrži keyword
-    5) Vrati cid + username + likes
+    1) expand short link
+    2) extract video_id
+    3) fetch comments (više stranica)
+    4) nađi komentar koji matcha keyworde (uzima NAJLAJKANIJI match)
     """
     video_url = expand_tiktok_url(video_url)
-
     video_id = extract_video_id(video_url)
-    if not video_id:
-        return {"found": False, "error": "Video ID nije pronađen (provjeri link)"}
 
-    comments = fetch_comments(video_id)
+    if not video_id:
+        return {"found": False, "error": "Video ID nije pronađen (provjeri link)", "expanded_url": video_url}
+
+    kw = keywords if keywords and len(keywords) > 0 else DEFAULT_KEYWORDS
+    kw = [k.strip() for k in kw if k and k.strip()]
+
+    comments = fetch_comments_paged(video_id, count=50, max_pages=5)  # 250 komentara max
     if not comments:
-        return {"found": False, "error": "Nema komentara ili fetch nije uspio"}
+        return {"found": False, "error": "Nema komentara ili fetch nije uspio", "expanded_url": video_url}
 
     top_likes = 0
-    my_comment = None
+    best_match = None
 
     for c in comments:
-        likes = c.get("digg_count", 0)
-        text = (c.get("text") or "").lower()
+        likes = int(c.get("digg_count") or 0)
+        text_raw = c.get("text") or ""
+        text_norm = normalize_text(text_raw)
 
         if likes > top_likes:
             top_likes = likes
 
-        if any(k in text for k in KEYWORDS):
-            user = c.get("user", {}) or {}
-            my_comment = {
+        # Match na bilo koji keyword (fuzzy token match)
+        if any(phrase_match(text_norm, k) for k in kw):
+            user = c.get("user") or {}
+            candidate = {
                 "cid": c.get("cid"),
                 "likes": likes,
-                "username": user.get("unique_id")
+                "username": user.get("unique_id"),
+                "text": text_raw,
             }
-            break
+            # uzmi match koji ima najviše lajkova (najvjerovatnije pravi)
+            if (best_match is None) or (candidate["likes"] > best_match["likes"]):
+                best_match = candidate
 
-    if not my_comment or not my_comment.get("cid") or not my_comment.get("username"):
-        return {"found": False, "error": "Keyword komentar nije pronađen"}
+    if not best_match or not best_match.get("cid") or not best_match.get("username"):
+        return {"found": False, "error": "Keyword komentar nije pronađen", "expanded_url": video_url}
 
     return {
         "found": True,
         "video_id": video_id,
-        "my_cid": my_comment["cid"],
-        "my_likes": apply_buffer(my_comment["likes"]),
+        "my_cid": best_match["cid"],
+        "my_likes": apply_buffer(best_match["likes"]),
         "top_likes": top_likes,
-        "username": my_comment["username"],
-        "expanded_url": video_url  # korisno za debug
+        "username": best_match["username"],
+        "matched_text": best_match["text"],
+        "expanded_url": video_url,
     }
