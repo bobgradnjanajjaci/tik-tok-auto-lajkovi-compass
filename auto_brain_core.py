@@ -3,48 +3,33 @@ import requests
 from comment_finder import find_target_comment
 from like_rules import calculate_target_likes
 
-LIKE_APP_URL = "https://lajkovi-crtica-lajkovi.up.railway.app/"  # ⬅️ tvoj URL
+LIKE_APP_URL = "https://lajkovi-crtica-lajkovi.up.railway.app/"
 
+def process_video(video_url: str) -> dict:
+    result = find_target_comment(video_url)
 
-def process_video(video_url: str, keywords: list[str] | None = None) -> dict:
-    # 🔁 1. pokušaj
-    result = find_target_comment(video_url, keywords)
-
-    # 🔁 2. pokušaj ako prvi ne uspije
     if not result.get("found"):
         time.sleep(2)
-        result = find_target_comment(video_url, keywords)
+        result = find_target_comment(video_url)
 
     if not result.get("found"):
-        return {
-            "status": "error",
-            "message": "Komentar nije pronađen ni nakon 2 pokušaja"
-        }
+        return {"status": "error", "message": "Komentar nije pronađen"}
 
-    top_likes = result["top_likes"]
-    my_likes = result["my_likes"]
-    username = result["username"]
+    target = calculate_target_likes(result["top_likes"])
+    to_send = max(0, target - result["my_likes"])
 
-    target = calculate_target_likes(top_likes)
-    if target == 0:
-        return {"status": "skip", "message": "Top komentar prevelik"}
-
-    to_send = max(0, target - my_likes)
     if to_send <= 0:
-        return {"status": "ok", "message": "Već ima dovoljno lajkova"}
+        return {"status": "skip", "message": "Dovoljno lajkova"}
 
     payload = {
-        "orders": f"{video_url} {username} {to_send}"
+        "orders": f"{video_url} {result['username']} {to_send}"
     }
 
-    r = requests.post(LIKE_APP_URL, data=payload, timeout=25)
+    r = requests.post(LIKE_APP_URL, data=payload, timeout=20)
 
     return {
         "status": "sent",
-        "likes_sent": to_send,
-        "username": username,
-        "top_likes": top_likes,
-        "my_likes_buffered": my_likes,
-        "matched_text": result["matched_text"][:120],
+        "likes": to_send,
+        "username": result["username"],
         "response": r.text[:200]
     }
