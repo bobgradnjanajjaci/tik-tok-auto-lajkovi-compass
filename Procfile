@@ -1,1 +1,2 @@
-web: gunicorn tiktok_auto_lajkovi_compass app:app
+web: gunicorn app:app
+
