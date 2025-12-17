@@ -7,19 +7,20 @@ HEADERS = {
 }
 
 SIGNATURE_TOKENS = [
+    "encrypted",
     "money",
-    "forbidden",
-    "compass",
-    "damian",
+    "code",
+    "ethan",
     "rothwell",
 ]
 
 POWER_PHRASES = [
     "changed my life",
     "change your life",
+    "change my life",
     "you need this book",
     "must read",
-    "game changer",
+    "game-changer",
     "another level",
     "read the book",
 ]
@@ -148,3 +149,4 @@ def find_target_comment(video_url: str) -> dict:
         "username": best["username"],
         "matched_text": best["text"],
     }
+
